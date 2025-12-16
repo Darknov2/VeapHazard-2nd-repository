@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Unity.AI.Navigation;
 
 /// Spawns random prefab structures on the terrain AFTER ProceduralTerrainGenerator has finished.
 /// - Uses grid-aligned placement with origin at (0,0) in XZ and configurable cell size.
@@ -46,6 +47,12 @@ public class RandomObjectSpawner : MonoBehaviour
     [Tooltip("Max tries per structure to find a valid point before skipping.")]
     public int maxTriesPerSpawn = 40;
 
+    [Header("NavMesh Rebuild")]
+    [Tooltip("Extra delay after spawning before triggering NavMesh rebuild.")]
+    public float extraBakeDelay = 0.05f;
+    [Tooltip("Name of the spawn container child of the generator.")]
+    public string spawnContainerName = "SpawnedStructures";
+
     private bool hasBounds;
     private Vector3 minBound, maxBound;
     private int gridXMin, gridXMax, gridZMin, gridZMax;
@@ -87,6 +94,13 @@ public class RandomObjectSpawner : MonoBehaviour
         // Allow one frame after terrain ready (e.g., colliders finalize)
         yield return null;
         SpawnMany(initialSpawnCount);
+        
+        // Wait for spawned meshes to be ready, then rebuild NavMesh
+        yield return new WaitForEndOfFrame();
+        if (extraBakeDelay > 0f)
+            yield return new WaitForSeconds(extraBakeDelay);
+        
+        TriggerNavMeshRebuild();
     }
 
     private void BuildBoundsFromConfig()
@@ -135,6 +149,9 @@ public class RandomObjectSpawner : MonoBehaviour
 
         float cell = Mathf.Max(0.0001f, gridCellSize);
 
+        // Ensure spawn container exists
+        Transform spawnContainer = GetOrCreateSpawnContainer();
+
         // Build the list of grid cells in XZ within bounds
         var cells = new List<Vector2Int>(Mathf.Max(1, (gridXMax - gridXMin + 1) * (gridZMax - gridZMin + 1)));
         for (int gx = gridXMin; gx <= gridXMax; gx++)
@@ -161,7 +178,8 @@ public class RandomObjectSpawner : MonoBehaviour
                 {
                     var prefab = structurePrefabs[Random.Range(0, structurePrefabs.Length)];
                     // Keep prefab’s original rotation; do not lean or randomize yaw
-                    Instantiate(prefab, pos, prefab.transform.rotation);
+                    GameObject spawned = Instantiate(prefab, pos, prefab.transform.rotation);
+                    spawned.transform.SetParent(spawnContainer, true);
                     placed = true;
                 }
             }
@@ -192,5 +210,51 @@ public class RandomObjectSpawner : MonoBehaviour
 
         // No ground found; return NaN Y to indicate failure
         return new Vector3(x, float.NaN, z);
+    }
+
+    private Transform GetOrCreateSpawnContainer()
+    {
+        if (generator == null) return transform;
+        
+        Transform container = generator.transform.Find(spawnContainerName);
+        if (container == null)
+        {
+            GameObject containerGO = new GameObject(spawnContainerName);
+            containerGO.transform.SetParent(generator.transform, false);
+            container = containerGO.transform;
+        }
+        return container;
+    }
+
+    private void TriggerNavMeshRebuild()
+    {
+        // Try to use NavMeshTerrainBaker if available
+        NavMeshTerrainBaker baker = generator != null ? generator.GetComponent<NavMeshTerrainBaker>() : null;
+        
+        if (baker != null)
+        {
+            Debug.Log("[RandomObjectSpawner] Triggering NavMesh rebuild via NavMeshTerrainBaker.RebuildNavMesh()");
+            baker.RebuildNavMesh();
+        }
+        else
+        {
+            // Fallback: use or add NavMeshSurface
+            NavMeshSurface surface = generator != null ? generator.GetComponent<NavMeshSurface>() : null;
+            if (surface == null && generator != null)
+            {
+                surface = generator.gameObject.AddComponent<NavMeshSurface>();
+            }
+            
+            if (surface != null)
+            {
+                surface.collectObjects = CollectObjects.Children;
+                Debug.Log("[RandomObjectSpawner] Triggering NavMesh rebuild via NavMeshSurface.BuildNavMesh()");
+                surface.BuildNavMesh();
+            }
+            else
+            {
+                Debug.LogWarning("[RandomObjectSpawner] Could not find or create NavMesh builder component.");
+            }
+        }
     }
 }

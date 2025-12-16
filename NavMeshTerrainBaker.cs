@@ -28,6 +28,8 @@ public class NavMeshTerrainBaker : MonoBehaviour
     [Header("Source Filtering")]
     public bool onlyActiveObjects = true;
     public LayerMask includeLayers = ~0;
+    [Tooltip("Name of the spawn container to include in NavMesh baking.")]
+    public string spawnContainerName = "SpawnedStructures";
 
     [Header("Validation/Sanitization")]
     public float maxAbsCoordinate = 100000f;
@@ -107,8 +109,71 @@ public class NavMeshTerrainBaker : MonoBehaviour
         if (surface == null) return;
 
         var sources = new List<NavMeshBuildSource>(256);
+        
+        // Collect from generator's children (terrain chunks)
         Transform root = generator != null ? generator.transform : transform;
+        CollectSourcesFromRoot(root, sources);
+        
+        // Also collect from spawn container if it exists
+        Transform spawnContainer = FindSpawnContainer();
+        if (spawnContainer != null && spawnContainer != root)
+        {
+            CollectSourcesFromRoot(spawnContainer, sources);
+        }
 
+        if (sources.Count == 0)
+        {
+            // No valid meshes available yet; just skip building this cycle
+            return;
+        }
+
+        // Bounds - compute from build sources to encompass all spawned objects
+        Bounds buildBounds = ComputeBoundsFromSources(sources);
+
+        // Settings
+        var settings = GetBuildSettings(surface.agentTypeID);
+        if (overrideVoxelSize > 0f)
+        {
+            settings.overrideVoxelSize = true;
+            settings.voxelSize = Mathf.Max(0.05f, overrideVoxelSize);
+        }
+        if (overrideTileSize > 0)
+        {
+            settings.overrideTileSize = true;
+            settings.tileSize = Mathf.Max(8, overrideTileSize);
+        }
+
+        // Build and apply
+        var data = NavMeshBuilder.BuildNavMeshData(settings, sources, buildBounds, Vector3.zero, Quaternion.identity);
+        if (data == null) return;
+
+        surface.RemoveData();
+        surface.navMeshData = data;
+        surface.AddData();
+    }
+
+    private Transform FindSpawnContainer()
+    {
+        // First, try to find it as a child of generator
+        if (generator != null)
+        {
+            Transform container = generator.transform.Find(spawnContainerName);
+            if (container != null) return container;
+        }
+        
+        // Fallback: search globally by name
+        GameObject[] allObjects = GameObject.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
+        foreach (var obj in allObjects)
+        {
+            if (obj.name == spawnContainerName)
+                return obj.transform;
+        }
+        
+        return null;
+    }
+
+    private void CollectSourcesFromRoot(Transform root, List<NavMeshBuildSource> sources)
+    {
         // Collect from MeshFilters
         var filters = root.GetComponentsInChildren<MeshFilter>(true);
         foreach (var mf in filters)
@@ -154,38 +219,59 @@ public class NavMeshTerrainBaker : MonoBehaviour
                 });
             }
         }
+    }
 
+    private Bounds ComputeBoundsFromSources(List<NavMeshBuildSource> sources)
+    {
         if (sources.Count == 0)
         {
-            // No valid meshes available yet; just skip building this cycle
-            return;
+            // Fallback to config or renderers
+            if (autoBoundsFromConfig && generator != null && generator.config != null)
+                return ComputeBoundsFromConfig(generator.config);
+            else
+                return ComputeBoundsFromRenderers(generator != null ? generator.transform : transform);
         }
 
-        // Bounds
-        Bounds buildBounds = autoBoundsFromConfig && generator != null && generator.config != null
-            ? ComputeBoundsFromConfig(generator.config)
-            : ComputeBoundsFromRenderers(root);
-
-        // Settings
-        var settings = GetBuildSettings(surface.agentTypeID);
-        if (overrideVoxelSize > 0f)
+        // Compute bounds from all sources
+        Bounds bounds = new Bounds();
+        bool first = true;
+        
+        foreach (var source in sources)
         {
-            settings.overrideVoxelSize = true;
-            settings.voxelSize = Mathf.Max(0.05f, overrideVoxelSize);
+            if (source.sourceObject is Mesh mesh)
+            {
+                // Transform mesh bounds to world space
+                Bounds meshBounds = mesh.bounds;
+                Matrix4x4 matrix = source.transform;
+                
+                // Get the 8 corners of the bounds
+                Vector3[] corners = new Vector3[8];
+                corners[0] = matrix.MultiplyPoint3x4(meshBounds.min);
+                corners[1] = matrix.MultiplyPoint3x4(new Vector3(meshBounds.min.x, meshBounds.min.y, meshBounds.max.z));
+                corners[2] = matrix.MultiplyPoint3x4(new Vector3(meshBounds.min.x, meshBounds.max.y, meshBounds.min.z));
+                corners[3] = matrix.MultiplyPoint3x4(new Vector3(meshBounds.max.x, meshBounds.min.y, meshBounds.min.z));
+                corners[4] = matrix.MultiplyPoint3x4(new Vector3(meshBounds.min.x, meshBounds.max.y, meshBounds.max.z));
+                corners[5] = matrix.MultiplyPoint3x4(new Vector3(meshBounds.max.x, meshBounds.min.y, meshBounds.max.z));
+                corners[6] = matrix.MultiplyPoint3x4(new Vector3(meshBounds.max.x, meshBounds.max.y, meshBounds.min.z));
+                corners[7] = matrix.MultiplyPoint3x4(meshBounds.max);
+                
+                if (first)
+                {
+                    bounds = new Bounds(corners[0], Vector3.zero);
+                    first = false;
+                }
+                
+                foreach (var corner in corners)
+                {
+                    bounds.Encapsulate(corner);
+                }
+            }
         }
-        if (overrideTileSize > 0)
-        {
-            settings.overrideTileSize = true;
-            settings.tileSize = Mathf.Max(8, overrideTileSize);
-        }
-
-        // Build and apply
-        var data = NavMeshBuilder.BuildNavMeshData(settings, sources, buildBounds, Vector3.zero, Quaternion.identity);
-        if (data == null) return;
-
-        surface.RemoveData();
-        surface.navMeshData = data;
-        surface.AddData();
+        
+        // Add padding
+        bounds.Expand(boundsPadding * 2f);
+        
+        return bounds;
     }
 
     private static bool IsValidMesh(Mesh mesh)
@@ -293,4 +379,5 @@ public class NavMeshTerrainBaker : MonoBehaviour
 
     private static bool IsFinite(Vector3 p)
         => float.IsFinite(p.x) && float.IsFinite(p.y) && float.IsFinite(p.z);
+}
 }
