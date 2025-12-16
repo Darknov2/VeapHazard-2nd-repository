@@ -1,0 +1,77 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 130e462c0ebbb2640934d14cb956e79e, type: 3}
+  m_Name: ProceduralTerrainConfig
+  m_EditorClassIdentifier: 
+  seed: 1254
+  isoLevel: 1
+  worldOffset: {x: 0, y: 0, z: 0}
+  chunksX: 16
+  chunksY: 8
+  chunksZ: 16
+  chunkSizeXZ: 8
+  chunkSizeY: 8
+  voxelScale: 1
+  surfaceLayerIndex: 2
+  islandsStartLayer: 3
+  cavesStartLayer: 0
+  cavesEndLayer: -5
+  autoComputeSurfaceHeight: 1
+  surfaceBaseHeight: 20
+  surfaceNoiseScale: 0.008
+  surfaceNoiseAmplitude: 65.6
+  surfaceOctaves: 3
+  surfacePersistence: 0.56
+  surfaceLacunarity: 2.26
+  groundDensityScale: 1
+  maxGroundDensity: 4
+  caves:
+    enabled: 1
+    wormsPerKm2Surface: 38.2
+    wormsPerKm2Per50mDepth: 43.6
+    wormSteps: 5
+    stepLength: 29.2
+    radius: 4.3
+    carveStrength: 28.89
+    bridgeMaxGap: 0.6
+    bridgeBoost: 0.54
+    inertia: 0.045
+    jitter: 0.085
+    verticalFlipChance: 0.262
+    downwardBias: 0.075
+    maxTotalWorms: 8
+  islands:
+    enabled: 1
+    infinite: 0
+    cellSizeXZ: 84.4
+    cellSizeY: 95.3
+    maxIslandsPerCell: 3
+    spawnProbability: 0.93
+    radiusRange: {x: 16.3, y: 9.08}
+    islandFalloff: 2.7
+    densityBoost: 1.92
+    noiseScale: 0.13
+    noiseDisplacement: 3.54
+    bridgeMaxGap: 3
+    bridgeHorizontalFactor: 0.85
+    bridgeDensityBoost: 4
+    mergeFadeHeightFactor: 0.4
+    mergeFadePower: 0.85
+    boundsInflateFactor: 1.15
+    drawCellBounds: 0
+    drawCenters: 0
+  asyncGeneration: 1
+  maxParallelChunks: 3
+  generateOnStart: 1
+  deduplicateVertices: 1
+  dedupEpsilon: 0.0005
+  smoothNormals: 1
