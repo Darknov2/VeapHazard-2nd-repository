@@ -161,12 +161,11 @@ public class NavMeshTerrainBaker : MonoBehaviour
             if (container != null) return container;
         }
         
-        // Fallback: search globally by name
-        GameObject[] allObjects = GameObject.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
-        foreach (var obj in allObjects)
+        // Fallback: search globally by name (only if generator reference is missing)
+        if (generator == null)
         {
-            if (obj.name == spawnContainerName)
-                return obj.transform;
+            GameObject found = GameObject.Find(spawnContainerName);
+            if (found != null) return found.transform;
         }
         
         return null;

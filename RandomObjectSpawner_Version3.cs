@@ -238,12 +238,8 @@ public class RandomObjectSpawner : MonoBehaviour
         }
         else
         {
-            // Fallback: use or add NavMeshSurface
+            // Fallback: use NavMeshSurface if it exists (don't auto-create)
             NavMeshSurface surface = generator != null ? generator.GetComponent<NavMeshSurface>() : null;
-            if (surface == null && generator != null)
-            {
-                surface = generator.gameObject.AddComponent<NavMeshSurface>();
-            }
             
             if (surface != null)
             {
@@ -253,7 +249,7 @@ public class RandomObjectSpawner : MonoBehaviour
             }
             else
             {
-                Debug.LogWarning("[RandomObjectSpawner] Could not find or create NavMesh builder component.");
+                Debug.LogWarning("[RandomObjectSpawner] No NavMeshTerrainBaker or NavMeshSurface found. Please add one to enable NavMesh baking for spawned structures.");
             }
         }
     }
