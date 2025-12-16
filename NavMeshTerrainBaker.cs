@@ -208,6 +208,7 @@ public class NavMeshTerrainBaker : MonoBehaviour
         if (surface == null) return;
 
         var sources = new List<NavMeshBuildSource>(256);
+        var bakedMeshes = new List<Mesh>(); // Track baked meshes for cleanup
         Transform root = generator != null ? generator.transform : transform;
 
         // Also check for spawned structures container
@@ -277,6 +278,7 @@ public class NavMeshTerrainBaker : MonoBehaviour
                 if (!IsValidMesh(bakedMesh)) { skippedObjects++; continue; }
                 if (!ValidateAndFixMesh(bakedMesh)) { skippedObjects++; continue; }
 
+                bakedMeshes.Add(bakedMesh); // Track for cleanup
                 sources.Add(new NavMeshBuildSource
                 {
                     shape = NavMeshBuildSourceShape.Mesh,
@@ -331,7 +333,22 @@ public class NavMeshTerrainBaker : MonoBehaviour
         }
 
         // Compute bounds from collected sources
-        Bounds buildBounds = ComputeBoundsFromSources(sources);
+        Bounds buildBounds;
+        if (autoBoundsFromConfig && generator != null && generator.config != null)
+        {
+            // Use config-based bounds as fallback if no sources to compute from
+            buildBounds = ComputeBoundsFromConfig(generator.config);
+            if (sources.Count > 0)
+            {
+                // Expand config bounds to include actual mesh sources
+                Bounds sourceBounds = ComputeBoundsFromSources(sources);
+                buildBounds.Encapsulate(sourceBounds);
+            }
+        }
+        else
+        {
+            buildBounds = ComputeBoundsFromSources(sources);
+        }
 
         if (verboseDiagnostics)
         {
@@ -373,6 +390,15 @@ public class NavMeshTerrainBaker : MonoBehaviour
         if (verboseDiagnostics)
         {
             Debug.Log("NavMeshTerrainBaker: NavMesh rebuild complete.");
+        }
+
+        // Clean up baked meshes to prevent memory leaks
+        foreach (var bakedMesh in bakedMeshes)
+        {
+            if (bakedMesh != null)
+            {
+                Object.Destroy(bakedMesh);
+            }
         }
     }
 

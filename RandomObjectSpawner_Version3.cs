@@ -130,14 +130,14 @@ public class RandomObjectSpawner : MonoBehaviour
             // Fallback: ensure NavMeshSurface exists on generator and build directly
             if (generator != null)
             {
-                var surface = generator.GetComponent<Unity.AI.Navigation.NavMeshSurface>();
+                var surface = generator.GetComponent<NavMeshSurface>();
                 if (surface == null)
                 {
-                    surface = generator.gameObject.AddComponent<Unity.AI.Navigation.NavMeshSurface>();
+                    surface = generator.gameObject.AddComponent<NavMeshSurface>();
                 }
                 
                 // Configure surface to collect from children
-                surface.collectObjects = Unity.AI.Navigation.CollectObjects.Children;
+                surface.collectObjects = CollectObjects.Children;
                 
                 // Wait for the delay before building
                 if (totalDelay > 0f)
