@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Unity.AI.Navigation;
 
 /// Spawns random prefab structures on the terrain AFTER ProceduralTerrainGenerator has finished.
 /// - Uses grid-aligned placement with origin at (0,0) in XZ and configurable cell size.
@@ -46,9 +47,14 @@ public class RandomObjectSpawner : MonoBehaviour
     [Tooltip("Max tries per structure to find a valid point before skipping.")]
     public int maxTriesPerSpawn = 40;
 
+    [Header("NavMesh Baking")]
+    [Tooltip("Delay after spawning before triggering NavMesh bake (in seconds).")]
+    public float extraBakeDelay = 0.5f;
+
     private bool hasBounds;
     private Vector3 minBound, maxBound;
     private int gridXMin, gridXMax, gridZMin, gridZMax;
+    private Transform spawnedStructuresContainer;
 
     private void Awake()
     {
@@ -86,7 +92,77 @@ public class RandomObjectSpawner : MonoBehaviour
     {
         // Allow one frame after terrain ready (e.g., colliders finalize)
         yield return null;
+        
+        // Ensure spawn container exists
+        EnsureSpawnContainer();
+        
+        // Spawn structures
         SpawnMany(initialSpawnCount);
+        
+        // Wait EndOfFrame + extraBakeDelay before scheduling NavMesh bake
+        yield return new WaitForEndOfFrame();
+        
+        float totalDelay = Mathf.Max(0f, extraBakeDelay);
+        
+        // Try to find NavMeshTerrainBaker on the generator
+        NavMeshTerrainBaker baker = null;
+        if (generator != null)
+        {
+            baker = generator.GetComponent<NavMeshTerrainBaker>();
+        }
+        
+        if (baker != null)
+        {
+            // Use the baker to schedule a coordinated rebuild
+            if (totalDelay > 0f)
+            {
+                baker.RequestRebuildAfterDelay(totalDelay);
+                Debug.Log($"RandomObjectSpawner: Scheduled NavMesh rebuild via NavMeshTerrainBaker with delay {totalDelay}s");
+            }
+            else
+            {
+                baker.RequestRebuild();
+                Debug.Log("RandomObjectSpawner: Scheduled NavMesh rebuild via NavMeshTerrainBaker");
+            }
+        }
+        else
+        {
+            // Fallback: ensure NavMeshSurface exists on generator and build directly
+            if (generator != null)
+            {
+                var surface = generator.GetComponent<Unity.AI.Navigation.NavMeshSurface>();
+                if (surface == null)
+                {
+                    surface = generator.gameObject.AddComponent<Unity.AI.Navigation.NavMeshSurface>();
+                }
+                
+                // Configure surface to collect from children
+                surface.collectObjects = Unity.AI.Navigation.CollectObjects.Children;
+                
+                // Wait for the delay before building
+                if (totalDelay > 0f)
+                {
+                    yield return new WaitForSeconds(totalDelay);
+                }
+                
+                surface.BuildNavMesh();
+                Debug.Log("RandomObjectSpawner: Built NavMesh via NavMeshSurface (fallback)");
+            }
+        }
+    }
+    
+    private void EnsureSpawnContainer()
+    {
+        if (generator == null) return;
+        
+        // Find or create SpawnedStructures container
+        spawnedStructuresContainer = generator.transform.Find("SpawnedStructures");
+        if (spawnedStructuresContainer == null)
+        {
+            GameObject container = new GameObject("SpawnedStructures");
+            container.transform.SetParent(generator.transform, false);
+            spawnedStructuresContainer = container.transform;
+        }
     }
 
     private void BuildBoundsFromConfig()
@@ -161,7 +237,13 @@ public class RandomObjectSpawner : MonoBehaviour
                 {
                     var prefab = structurePrefabs[Random.Range(0, structurePrefabs.Length)];
                     // Keep prefab’s original rotation; do not lean or randomize yaw
-                    Instantiate(prefab, pos, prefab.transform.rotation);
+                    GameObject spawned = Instantiate(prefab, pos, prefab.transform.rotation);
+                    
+                    // Parent under SpawnedStructures container if available
+                    if (spawnedStructuresContainer != null)
+                    {
+                        spawned.transform.SetParent(spawnedStructuresContainer, true);
+                    }
                     placed = true;
                 }
             }
