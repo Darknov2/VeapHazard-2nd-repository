@@ -20,6 +20,7 @@ public class NavMeshTerrainBaker : MonoBehaviour
     [Header("Bounds")]
     public bool autoBoundsFromConfig = true;
     public float boundsPadding = 2f;
+    public float fallbackBoundsSize = 100f; // Size of fallback bounds when no meshes are available
 
     [Header("Resolution")]
     public float overrideVoxelSize = 0.2f; // 0 = default
@@ -397,7 +398,7 @@ public class NavMeshTerrainBaker : MonoBehaviour
         {
             if (bakedMesh != null)
             {
-                Object.Destroy(bakedMesh);
+                Object.DestroyImmediate(bakedMesh);
             }
         }
     }
@@ -406,7 +407,7 @@ public class NavMeshTerrainBaker : MonoBehaviour
     {
         if (sources.Count == 0)
         {
-            return new Bounds(Vector3.zero, Vector3.one * 100f);
+            return new Bounds(Vector3.zero, Vector3.one * Mathf.Max(1f, fallbackBoundsSize));
         }
 
         // Initialize with the first mesh bounds

@@ -99,7 +99,7 @@ public class RandomObjectSpawner : MonoBehaviour
         // Spawn structures
         SpawnMany(initialSpawnCount);
         
-        // Wait EndOfFrame + extraBakeDelay before scheduling NavMesh bake
+        // Wait EndOfFrame before scheduling NavMesh bake with delay
         yield return new WaitForEndOfFrame();
         
         float totalDelay = Mathf.Max(0f, extraBakeDelay);
