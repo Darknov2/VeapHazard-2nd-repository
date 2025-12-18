@@ -18,7 +18,7 @@ public class PlayerBombInteractor : MonoBehaviour
             }
         }
         // Reset all other bombs
-        foreach (BombRaycastInteractable bomb in FindObjectsOfType<BombRaycastInteractable>())
+        foreach (BombRaycastInteractable bomb in SceneFind.All<BombRaycastInteractable>())
         {
             if (bomb != bombHit)
                 bomb.SetPlayerLooking(false);

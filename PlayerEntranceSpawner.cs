@@ -112,7 +112,7 @@ public class PlayerEntranceSpawner : MonoBehaviour
 
     private Sign FindEntranceSign(GameState.Cardinal side)
     {
-        var signs = FindObjectsOfType<Sign>(true);
+        var signs = SceneFind.All<Sign>(includeInactive: true);
         Sign best = null;
         foreach (var s in signs)
         {

@@ -223,7 +223,7 @@ public class Sign : MonoBehaviour
         getNeighborIndexMethod = null; loadSceneByIndexMethod = null;
         getSceneNameForIndexMethod = null; loadSceneByNameMethod = null;
 
-        var all = FindObjectsOfType<MonoBehaviour>();
+        var all = SceneFind.All<MonoBehaviour>();
         foreach (var mb in all)
         {
             var t = mb.GetType();

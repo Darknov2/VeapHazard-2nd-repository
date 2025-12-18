@@ -18,9 +18,9 @@ public class WorldBox : MonoBehaviour
         if (!string.IsNullOrEmpty(displayName)) return;
 
         // Try to obtain a name from a WorldSelector_RandomGroup (preferred)
-        var rg = FindObjectOfType(typeof(MonoBehaviour)) as MonoBehaviour;
+        var rg = SceneFind.First(typeof(MonoBehaviour)) as MonoBehaviour;
         // Find by type name to avoid compile-time dependency
-        var all = FindObjectsOfType<MonoBehaviour>();
+        var all = SceneFind.All<MonoBehaviour>();
         foreach (var mb in all)
         {
             var t = mb.GetType();
@@ -85,7 +85,7 @@ public class WorldBox : MonoBehaviour
     public string GetSceneName()
     {
         // Try WorldSelector_RandomGroup first
-        var all = FindObjectsOfType<MonoBehaviour>();
+        var all = SceneFind.All<MonoBehaviour>();
         foreach (var mb in all)
         {
             var t = mb.GetType();

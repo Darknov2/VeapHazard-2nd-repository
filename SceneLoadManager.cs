@@ -19,7 +19,7 @@ public class SceneLoadManager : MonoBehaviour
         {
             if (_instance == null)
             {
-                _instance = FindObjectOfType<SceneLoadManager>();
+                _instance = SceneFind.First<SceneLoadManager>();
                 if (_instance == null)
                 {
                     var go = new GameObject("SceneLoadManager");
@@ -297,7 +297,7 @@ public class SceneLoadManager : MonoBehaviour
             GameState.SelectedWorldSceneName = iKey;
             Debug.Log($"SceneLoadManager: Replaced and mapped instanceKey '{iKey}' -> handle {newScene.handle}");
             yield return null;
-            try { var selector = FindObjectOfType<WorldSelector_PersistScenes>(); selector?.PersistMappingToGameStatePublic(); } catch { }
+            try { var selector = SceneFind.First<WorldSelector_PersistScenes>(); selector?.PersistMappingToGameStatePublic(); } catch { }
             LogSceneList("After Single replace");
             yield break;
         }
@@ -367,7 +367,7 @@ public class SceneLoadManager : MonoBehaviour
         Debug.Log($"SceneLoadManager: Selected world instance = '{instanceKey}', selectedIndex={GameState.SelectedWorldIndex}");
 
         yield return null;
-        try { var selector = FindObjectOfType<WorldSelector_PersistScenes>(); selector?.PersistMappingToGameStatePublic(); } catch { }
+        try { var selector = SceneFind.First<WorldSelector_PersistScenes>(); selector?.PersistMappingToGameStatePublic(); } catch { }
         LogSceneList("After additive load");
 
         // Safety cleanup
