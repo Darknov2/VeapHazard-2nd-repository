@@ -28,6 +28,10 @@ public class PlayerController : MonoBehaviour
     [Header("Build Mode")]
     public bool buildMode = false;
 
+    [Header("References")]
+    [Tooltip("Optional: assign the PlayerInteractor that owns the center-screen raycast. If null this script falls back to its own Physics.Raycast.")]
+    public PlayerInteractor playerInteractor;
+
     // ---- Removed legacy terrain-edit fields and methods (use InputTerrainBrush instead) ----
 
     private CharacterController characterController;
@@ -41,6 +45,12 @@ public class PlayerController : MonoBehaviour
         if (cameraTransform == null && Camera.main != null)
             cameraTransform = Camera.main.transform;
 
+        // try auto-assigning the interactor if not set
+        if (playerInteractor == null)
+        {
+            playerInteractor = GetComponent<PlayerInteractor>() ?? GetComponentInChildren<PlayerInteractor>() ?? FindObjectOfType<PlayerInteractor>();
+        }
+
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
     }
@@ -48,8 +58,6 @@ public class PlayerController : MonoBehaviour
     void Update()
     {
         HandleMovement();
-
-    
 
         HandleDestroyObject();
         TryPushObjects();
@@ -93,7 +101,20 @@ public class PlayerController : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.E))
         {
             RaycastHit hit;
-            if (Physics.Raycast(cameraTransform.position, cameraTransform.forward, out hit, raycastDistance, raycastLayerMask))
+            bool hasHit = false;
+
+            // Use PlayerInteractor's raycast when available; otherwise fall back to local Physics.Raycast
+            if (playerInteractor != null)
+            {
+                hasHit = playerInteractor.RaycastCenter(out hit, raycastDistance, raycastLayerMask);
+            }
+            else
+            {
+                if (cameraTransform == null && Camera.main != null) cameraTransform = Camera.main.transform;
+                hasHit = Physics.Raycast(cameraTransform.position, cameraTransform.forward, out hit, raycastDistance, raycastLayerMask);
+            }
+
+            if (hasHit)
             {
                 GameObject targetObject = hit.collider.gameObject;
 
@@ -102,19 +123,14 @@ public class PlayerController : MonoBehaviour
                     Transform parent = targetObject.transform.parent;
                     if (parent != null && parent.CompareTag("Destroyable"))
                     {
-                        Debug.Log($"Destroying child: {targetObject.name} of parent: {parent.name}");
+                        if (interactionVerboseLogs) Debug.Log($"Destroying child: {targetObject.name} of parent: {parent.name}");
                         Destroy(targetObject);
                     }
                     else
                     {
-                        Debug.Log($"Destroying object: {targetObject.name}");
+                        if (interactionVerboseLogs) Debug.Log($"Destroying object: {targetObject.name}");
                         Destroy(targetObject);
                     }
-                }
-                else if (targetObject.transform.parent != null && targetObject.transform.parent.CompareTag("Destroyable"))
-                {
-                    Debug.Log($"Destroying child: {targetObject.name} of parent: {targetObject.transform.parent.name}");
-                    Destroy(targetObject);
                 }
             }
         }
@@ -122,18 +138,23 @@ public class PlayerController : MonoBehaviour
 
     private void TryPushObjects()
     {
-        if (characterController.velocity.magnitude < 0.01f) return;
-
-        Vector3 moveDirection = new Vector3(characterController.velocity.x, 0, characterController.velocity.z).normalized;
-        Vector3 castOrigin = transform.position + characterController.center + Vector3.down * (characterController.height / 2 - characterController.radius);
-        float castDistance = characterController.radius + 0.2f;
-
-        foreach (var hit in Physics.SphereCastAll(castOrigin, characterController.radius, moveDirection, castDistance))
+        // Example push behaviour: raycast forward and apply impulse to rigidbodies
+        if (Input.GetMouseButtonDown(0))
         {
-            Rigidbody rb = hit.collider.attachedRigidbody;
-            if (rb != null && !rb.isKinematic && rb.gameObject != this.gameObject)
+            RaycastHit hit;
+            bool hasHit = false;
+            if (playerInteractor != null)
+                hasHit = playerInteractor.RaycastCenter(out hit, raycastDistance, raycastLayerMask);
+            else
+                hasHit = Physics.Raycast(cameraTransform.position, cameraTransform.forward, out hit, raycastDistance, raycastLayerMask);
+
+            if (hasHit && hit.rigidbody != null)
             {
-                rb.AddForce(moveDirection * pushForce, ForceMode.VelocityChange);
+                if (!hit.rigidbody.isKinematic)
+                {
+                    Vector3 dir = (hit.point - transform.position).normalized;
+                    hit.rigidbody.AddForce(dir * pushForce, ForceMode.Impulse);
+                }
             }
         }
     }
