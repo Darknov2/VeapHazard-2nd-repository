@@ -22,7 +22,7 @@ public class PlayerHealthBarUI : MonoBehaviour
 
     void Reset()
     {
-        playerHealth = FindObjectOfType<PlayerHealth>();
+        playerHealth = SceneFind.First<PlayerHealth>();
         healthSlider = GetComponentInChildren<Slider>();
         healthText = GetComponentInChildren<Text>();
         if (healthSlider != null && healthSlider.maxValue != 1f)
@@ -32,7 +32,7 @@ public class PlayerHealthBarUI : MonoBehaviour
     void Start()
     {
         if (playerHealth == null)
-            playerHealth = FindObjectOfType<PlayerHealth>();
+            playerHealth = SceneFind.First<PlayerHealth>();
 
         // Hook into events to refresh instantly
         if (playerHealth != null)
