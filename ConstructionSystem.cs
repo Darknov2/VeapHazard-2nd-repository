@@ -206,6 +206,12 @@ public class ConstructionSystem : MonoBehaviour
             // Record this instance as a placed object with its per-instance snap size
             placedRoots.Add(obj);
             placedSnapSizeXYZ[obj] = currentSize;
+            
+            // Refresh carving collider cache so terrain updates immediately
+            if (terrain != null && terrain.Sampler != null)
+            {
+                terrain.Sampler.RefreshCarvingColliderCache();
+            }
         }
     }
 

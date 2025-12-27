@@ -163,6 +163,18 @@ public class TerrainChunk : MonoBehaviour
         int sizeXZ = cfg.chunkSizeXZ;
         int sizeY = cfg.chunkSizeY;
 
+        // Calculate chunk bounds for carving collider collection
+        Vector3 basePos = transform.localPosition;
+        Vector3 chunkMin = basePos;
+        Vector3 chunkMax = basePos + new Vector3(
+            sizeXZ * scale,
+            sizeY * scale,
+            sizeXZ * scale
+        );
+
+        // Collect carving colliders in this chunk region
+        sampler.CollectCarvingColliders(chunkMin, chunkMax);
+
         // Early skip using sparse probe
         if (enableEmptyChunkSkip && IsChunkHomogeneousSparse(sizeXZ, sizeY))
         {
@@ -176,9 +188,7 @@ public class TerrainChunk : MonoBehaviour
         int needed = nx * ny * nz;
         if (density == null || density.Length != needed) density = new float[needed];
 
-        Vector3 basePos = transform.localPosition;
-
-        // Pre-sample densities
+        // Pre-sample densities (reuse basePos from above)
         for (int y = 0; y <= sizeY; y++)
         {
             float py = basePos.y + y * scale;
