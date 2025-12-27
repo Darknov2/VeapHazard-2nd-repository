@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections.Generic;
 
 public class DensitySampler
 {
@@ -10,11 +11,24 @@ public class DensitySampler
         public static DensityGates AllOn => new DensityGates{ surface=true, caves=true, islands=true };
     }
 
+    public struct CarvingColliderData
+    {
+        public Vector3 center;
+        public Vector3 size;
+        public Quaternion rotation;
+        public float carveStrength;
+    }
+
     private readonly ProceduralTerrainConfig cfg;
     private readonly SimplexNoise surfaceNoise;
     private readonly FloatingIslandsModule islands;
     private readonly CaveSystem caveSystem;
     private TerrainModificationManager modificationManager;
+
+    // Construction carving
+    private LayerMask constructionLayerMask;
+    private string requiredCarvingTag;
+    private readonly List<CarvingColliderData> carvingColliders = new List<CarvingColliderData>(128);
 
     public DensitySampler(ProceduralTerrainConfig cfg)
     {
@@ -26,6 +40,10 @@ public class DensitySampler
         islands.SetWorldOffset(cfg.worldOffset);
 
         caveSystem = cfg.caves;
+
+        // Store construction carving configuration
+        constructionLayerMask = cfg.constructionLayerMask;
+        requiredCarvingTag = cfg.requiredCarvingTag;
 
         if (cfg.autoComputeSurfaceHeight)
         {
@@ -56,6 +74,57 @@ public class DensitySampler
         caveSystem.ExtendCoverageToLocal(worldMinY, centerXZ.x, centerXZ.z, radiusXZ);
     }
 
+    /// <summary>
+    /// Collect construction carving colliders within a specified region.
+    /// Only colliders matching the layer mask and optional tag are included.
+    /// </summary>
+    public void CollectCarvingColliders(Vector3 chunkMin, Vector3 chunkMax)
+    {
+        carvingColliders.Clear();
+        
+        // Skip if no construction layer mask is configured
+        if (constructionLayerMask == 0) return;
+
+        // Find all colliders in the scene
+        Collider[] allColliders = Object.FindObjectsOfType<Collider>();
+        
+        foreach (var collider in allColliders)
+        {
+            // Skip if not on construction layer
+            if (((1 << collider.gameObject.layer) & constructionLayerMask) == 0)
+                continue;
+            
+            // Skip if required tag is set and doesn't match
+            if (!string.IsNullOrEmpty(requiredCarvingTag) && 
+                !collider.gameObject.CompareTag(requiredCarvingTag))
+                continue;
+            
+            // Get bounds and check if it overlaps with chunk region
+            Bounds bounds = collider.bounds;
+            
+            // Expand chunk bounds slightly to catch colliders on edges
+            Vector3 expandedMin = chunkMin - Vector3.one * 2f;
+            Vector3 expandedMax = chunkMax + Vector3.one * 2f;
+            
+            // Simple AABB overlap test
+            if (bounds.max.x < expandedMin.x || bounds.min.x > expandedMax.x ||
+                bounds.max.y < expandedMin.y || bounds.min.y > expandedMax.y ||
+                bounds.max.z < expandedMin.z || bounds.min.z > expandedMax.z)
+                continue;
+            
+            // Add to carving list
+            CarvingColliderData data = new CarvingColliderData
+            {
+                center = collider.bounds.center,
+                size = collider.bounds.size,
+                rotation = collider.transform.rotation,
+                carveStrength = 10f // Default carve strength
+            };
+            
+            carvingColliders.Add(data);
+        }
+    }
+
     public float SampleDensity(Vector3 worldPos, in DensityGates gates)
     {
         float iso = cfg.isoLevel;
@@ -82,7 +151,38 @@ public class DensitySampler
             }
         }
 
-        float total = ground + islandDensity + caveDensity + editDensity;
+        // Apply construction carving from colliders
+        float carvingDensity = 0f;
+        for (int i = 0; i < carvingColliders.Count; i++)
+        {
+            var carver = carvingColliders[i];
+            
+            // Calculate signed distance to box (approximation)
+            Vector3 localPos = worldPos - carver.center;
+            
+            // Rotate point into box local space (inverse rotation)
+            localPos = Quaternion.Inverse(carver.rotation) * localPos;
+            
+            // Calculate distance to box surface
+            Vector3 halfSize = carver.size * 0.5f;
+            Vector3 d = new Vector3(
+                Mathf.Abs(localPos.x) - halfSize.x,
+                Mathf.Abs(localPos.y) - halfSize.y,
+                Mathf.Abs(localPos.z) - halfSize.z
+            );
+            
+            // Signed distance to box
+            float maxD = Mathf.Max(d.x, Mathf.Max(d.y, d.z));
+            float dist = maxD;
+            
+            // If inside the box, carve
+            if (dist < 0f)
+            {
+                carvingDensity -= carver.carveStrength * (1f - Mathf.Abs(dist) / Mathf.Max(halfSize.x, Mathf.Max(halfSize.y, halfSize.z)));
+            }
+        }
+
+        float total = ground + islandDensity + caveDensity + editDensity + carvingDensity;
         return total - iso;
     }
 

@@ -41,6 +41,13 @@ public class ProceduralTerrainConfig : ScriptableObject
     [Header("Floating Islands")]
     public FloatingIslandsModule islands = new FloatingIslandsModule();
 
+    [Header("Construction Carving")]
+    [Tooltip("Layer mask for colliders that should carve terrain (e.g., Construction layer).")]
+    public LayerMask constructionLayerMask = 0;
+    
+    [Tooltip("Optional: if set, only colliders with this tag will carve terrain.")]
+    public string requiredCarvingTag = "";
+
     [Header("Generation")]
     public bool asyncGeneration = true;
     public int maxParallelChunks = 4;
