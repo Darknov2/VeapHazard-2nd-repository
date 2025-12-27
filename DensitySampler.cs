@@ -80,8 +80,20 @@ public class DensitySampler
     }
 
     /// <summary>
+    /// Manually refresh the construction collider cache.
+    /// Call this after placing or removing construction objects to ensure immediate carving updates.
+    /// </summary>
+    public void RefreshCarvingColliderCache()
+    {
+        cachedConstructionColliders = null;
+        lastColliderCacheTime = -1f;
+    }
+
+    /// <summary>
     /// Collect construction carving colliders within a specified region.
     /// Only colliders matching the layer mask and optional tag are included.
+    /// Note: Uses cached colliders refreshed every ColliderCacheRefreshInterval seconds
+    /// to avoid expensive FindObjectsOfType calls on every chunk generation.
     /// </summary>
     public void CollectCarvingColliders(Vector3 chunkMin, Vector3 chunkMax)
     {
@@ -91,6 +103,10 @@ public class DensitySampler
         if (constructionLayerMask == 0) return;
 
         // Refresh cache if needed
+        // Note: We use FindObjectsOfType with caching instead of Physics.OverlapBox because:
+        // 1. We need to filter by layer mask which Physics queries don't support well
+        // 2. Caching amortizes the cost across multiple chunk generations
+        // 3. Construction objects are typically static and don't change frequently
         float currentTime = Time.realtimeSinceStartup;
         if (cachedConstructionColliders == null || currentTime - lastColliderCacheTime > ColliderCacheRefreshInterval)
         {
@@ -198,14 +214,17 @@ public class DensitySampler
         
         // Signed distance to box
         float maxD = Mathf.Max(d.x, Mathf.Max(d.y, d.z));
-        float dist = maxD;
         
         // If inside the box, apply carving with falloff
-        if (dist < 0f)
+        if (maxD < 0f)
         {
             float maxHalfSize = Mathf.Max(halfSize.x, Mathf.Max(halfSize.y, halfSize.z));
-            float falloff = 1f - Mathf.Abs(dist) / maxHalfSize;
-            return -carver.carveStrength * falloff;
+            // Guard against division by zero for degenerate colliders
+            if (maxHalfSize > 0.001f)
+            {
+                float falloff = 1f - Mathf.Abs(maxD) / maxHalfSize;
+                return -carver.carveStrength * falloff;
+            }
         }
         
         return 0f;

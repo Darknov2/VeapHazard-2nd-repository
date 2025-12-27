@@ -58,6 +58,9 @@ public class ProceduralTerrainGenerator : MonoBehaviour
     private DensitySampler sampler;
     private readonly Dictionary<Vector3Int, TerrainChunk> chunks = new();
 
+    // Public accessor for sampler (used by external systems like ConstructionSystem)
+    public DensitySampler Sampler => sampler;
+
     // Pending load candidates and a small set for coalescing
     private readonly HashSet<Vector3Int> pendingSet = new HashSet<Vector3Int>();
     private readonly List<Vector3Int> pendingList = new List<Vector3Int>();
