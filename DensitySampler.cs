@@ -34,6 +34,10 @@ public class DensitySampler
     private Collider[] cachedConstructionColliders;
     private float lastColliderCacheTime = -1f;
     private const float ColliderCacheRefreshInterval = 1.0f; // Refresh cache every second
+    
+    // Constants for carving calculations
+    private const float MinColliderSizeThreshold = 0.001f;
+    private const float ChunkBoundsExpansion = 2f;
 
     public DensitySampler(ProceduralTerrainConfig cfg)
     {
@@ -107,9 +111,12 @@ public class DensitySampler
         // 1. We need to filter by layer mask which Physics queries don't support well
         // 2. Caching amortizes the cost across multiple chunk generations
         // 3. Construction objects are typically static and don't change frequently
+        // 4. Physics.OverlapBox would require multiple queries for all chunks vs one cached lookup
         float currentTime = Time.realtimeSinceStartup;
         if (cachedConstructionColliders == null || currentTime - lastColliderCacheTime > ColliderCacheRefreshInterval)
         {
+            // Alternative approach if FindObjectsOfType becomes a bottleneck:
+            // Use a registration system where construction objects register themselves on spawn
             cachedConstructionColliders = Object.FindObjectsOfType<Collider>();
             lastColliderCacheTime = currentTime;
         }
@@ -132,8 +139,8 @@ public class DensitySampler
             Bounds bounds = collider.bounds;
             
             // Expand chunk bounds slightly to catch colliders on edges
-            Vector3 expandedMin = chunkMin - Vector3.one * 2f;
-            Vector3 expandedMax = chunkMax + Vector3.one * 2f;
+            Vector3 expandedMin = chunkMin - Vector3.one * ChunkBoundsExpansion;
+            Vector3 expandedMax = chunkMax + Vector3.one * ChunkBoundsExpansion;
             
             // Simple AABB overlap test
             if (bounds.max.x < expandedMin.x || bounds.min.x > expandedMax.x ||
@@ -220,7 +227,7 @@ public class DensitySampler
         {
             float maxHalfSize = Mathf.Max(halfSize.x, Mathf.Max(halfSize.y, halfSize.z));
             // Guard against division by zero for degenerate colliders
-            if (maxHalfSize > 0.001f)
+            if (maxHalfSize > MinColliderSizeThreshold)
             {
                 float falloff = 1f - Mathf.Abs(maxD) / maxHalfSize;
                 return -carver.carveStrength * falloff;
