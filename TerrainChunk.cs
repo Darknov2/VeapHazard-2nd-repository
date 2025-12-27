@@ -188,9 +188,7 @@ public class TerrainChunk : MonoBehaviour
         int needed = nx * ny * nz;
         if (density == null || density.Length != needed) density = new float[needed];
 
-        Vector3 basePos = transform.localPosition;
-
-        // Pre-sample densities
+        // Pre-sample densities (reuse basePos from above)
         for (int y = 0; y <= sizeY; y++)
         {
             float py = basePos.y + y * scale;

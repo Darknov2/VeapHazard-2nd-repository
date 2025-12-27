@@ -29,6 +29,11 @@ public class DensitySampler
     private LayerMask constructionLayerMask;
     private string requiredCarvingTag;
     private readonly List<CarvingColliderData> carvingColliders = new List<CarvingColliderData>(128);
+    
+    // Cache for construction colliders to avoid expensive FindObjectsOfType calls
+    private Collider[] cachedConstructionColliders;
+    private float lastColliderCacheTime = -1f;
+    private const float ColliderCacheRefreshInterval = 1.0f; // Refresh cache every second
 
     public DensitySampler(ProceduralTerrainConfig cfg)
     {
@@ -85,11 +90,19 @@ public class DensitySampler
         // Skip if no construction layer mask is configured
         if (constructionLayerMask == 0) return;
 
-        // Find all colliders in the scene
-        Collider[] allColliders = Object.FindObjectsOfType<Collider>();
-        
-        foreach (var collider in allColliders)
+        // Refresh cache if needed
+        float currentTime = Time.realtimeSinceStartup;
+        if (cachedConstructionColliders == null || currentTime - lastColliderCacheTime > ColliderCacheRefreshInterval)
         {
+            cachedConstructionColliders = Object.FindObjectsOfType<Collider>();
+            lastColliderCacheTime = currentTime;
+        }
+        
+        foreach (var collider in cachedConstructionColliders)
+        {
+            // Skip null colliders (may have been destroyed)
+            if (collider == null) continue;
+            
             // Skip if not on construction layer
             if (((1 << collider.gameObject.layer) & constructionLayerMask) == 0)
                 continue;
@@ -118,7 +131,7 @@ public class DensitySampler
                 center = collider.bounds.center,
                 size = collider.bounds.size,
                 rotation = collider.transform.rotation,
-                carveStrength = 10f // Default carve strength
+                carveStrength = cfg.constructionCarveStrength
             };
             
             carvingColliders.Add(data);
@@ -156,34 +169,46 @@ public class DensitySampler
         for (int i = 0; i < carvingColliders.Count; i++)
         {
             var carver = carvingColliders[i];
-            
-            // Calculate signed distance to box (approximation)
-            Vector3 localPos = worldPos - carver.center;
-            
-            // Rotate point into box local space (inverse rotation)
-            localPos = Quaternion.Inverse(carver.rotation) * localPos;
-            
-            // Calculate distance to box surface
-            Vector3 halfSize = carver.size * 0.5f;
-            Vector3 d = new Vector3(
-                Mathf.Abs(localPos.x) - halfSize.x,
-                Mathf.Abs(localPos.y) - halfSize.y,
-                Mathf.Abs(localPos.z) - halfSize.z
-            );
-            
-            // Signed distance to box
-            float maxD = Mathf.Max(d.x, Mathf.Max(d.y, d.z));
-            float dist = maxD;
-            
-            // If inside the box, carve
-            if (dist < 0f)
-            {
-                carvingDensity -= carver.carveStrength * (1f - Mathf.Abs(dist) / Mathf.Max(halfSize.x, Mathf.Max(halfSize.y, halfSize.z)));
-            }
+            carvingDensity += CalculateCarvingDensity(worldPos, carver);
         }
 
         float total = ground + islandDensity + caveDensity + editDensity + carvingDensity;
         return total - iso;
+    }
+
+    /// <summary>
+    /// Calculate the carving density contribution from a single collider.
+    /// Returns negative density (carving) when the point is inside the collider bounds.
+    /// </summary>
+    private float CalculateCarvingDensity(Vector3 worldPos, CarvingColliderData carver)
+    {
+        // Calculate signed distance to box (approximation)
+        Vector3 localPos = worldPos - carver.center;
+        
+        // Rotate point into box local space (inverse rotation)
+        localPos = Quaternion.Inverse(carver.rotation) * localPos;
+        
+        // Calculate distance to box surface
+        Vector3 halfSize = carver.size * 0.5f;
+        Vector3 d = new Vector3(
+            Mathf.Abs(localPos.x) - halfSize.x,
+            Mathf.Abs(localPos.y) - halfSize.y,
+            Mathf.Abs(localPos.z) - halfSize.z
+        );
+        
+        // Signed distance to box
+        float maxD = Mathf.Max(d.x, Mathf.Max(d.y, d.z));
+        float dist = maxD;
+        
+        // If inside the box, apply carving with falloff
+        if (dist < 0f)
+        {
+            float maxHalfSize = Mathf.Max(halfSize.x, Mathf.Max(halfSize.y, halfSize.z));
+            float falloff = 1f - Mathf.Abs(dist) / maxHalfSize;
+            return -carver.carveStrength * falloff;
+        }
+        
+        return 0f;
     }
 
     private float Fractal2D(float x, float z)

@@ -47,6 +47,9 @@ public class ProceduralTerrainConfig : ScriptableObject
     
     [Tooltip("Optional: if set, only colliders with this tag will carve terrain.")]
     public string requiredCarvingTag = "";
+    
+    [Tooltip("Strength of terrain carving around construction colliders.")]
+    public float constructionCarveStrength = 10f;
 
     [Header("Generation")]
     public bool asyncGeneration = true;
